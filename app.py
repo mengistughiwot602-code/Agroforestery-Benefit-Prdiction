@@ -67,20 +67,27 @@ st.markdown("""
 # --- Base Directory Pathing ---
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-# --- Load Dataset & Trained Models with Robust Paths ---
+# --- Load Dataset & Trained Models with Robust Paths & Type Coercion ---
 @st.cache_data
 def load_data():
     csv_path = os.path.join(BASE_DIR, "Costs_and_benefits_of_agroforestry_in_Africa.csv")
     df = pd.read_csv(csv_path, encoding='latin1')
     df_clean = df.copy()
     df_clean = df_clean.drop(columns=['nbr'], errors='ignore')
-    df_clean['benefitsusd2020'] = pd.to_numeric(df_clean['benefitsusd2020'], errors='coerce').fillna(99.5)
-    df_clean['totalusd2020'] = pd.to_numeric(df_clean['totalusd2020'], errors='coerce').fillna(152.0)
+    
+    # Safely coerce columns to numeric where appropriate so dtypes are correct
+    categorical_cols = ['Country', 'Agrofor_practice', 'curr_EcC_Transplanting', 'curr_EcC_total_max', 'curr_EcB_income_max', 'curr_EcB_tree']
+    for col in df_clean.columns:
+        if col not in categorical_cols:
+            df_clean[col] = pd.to_numeric(df_clean[col], errors='coerce')
+
+    df_clean['benefitsusd2020'] = df_clean['benefitsusd2020'].fillna(99.5)
+    df_clean['totalusd2020'] = df_clean['totalusd2020'].fillna(152.0)
     df_clean['Country'] = df_clean['Country'].fillna('Unspecified')
     df_clean['Agrofor_practice'] = df_clean['Agrofor_practice'].fillna('Unspecified')
-    df_clean['EcC_total_max'] = pd.to_numeric(df_clean['EcC_total_max'], errors='coerce').fillna(0)
-    df_clean['EcB_income_max'] = pd.to_numeric(df_clean['EcB_income_max'], errors='coerce').fillna(0)
-    df_clean['EcB_tree'] = pd.to_numeric(df_clean['EcB_tree'], errors='coerce').fillna(0)
+    df_clean['EcC_total_max'] = df_clean['EcC_total_max'].fillna(0)
+    df_clean['EcB_income_max'] = df_clean['EcB_income_max'].fillna(0)
+    df_clean['EcB_tree'] = df_clean['EcB_tree'].fillna(0)
     return df_clean
 
 try:
@@ -188,7 +195,7 @@ elif page == "🔮 Model Prediction":
 
                 df_input = df_input[train_cols]
 
-                # Strict type casting: enforce float for numerics, string for categoricals
+                # Strict type coercion: guaranteed float for numeric dtypes, string for categoricals
                 for col in train_cols:
                     if pd.api.types.is_numeric_dtype(df_clean[col]):
                         df_input[col] = pd.to_numeric(df_input[col], errors='coerce').fillna(0.0).astype(float)
