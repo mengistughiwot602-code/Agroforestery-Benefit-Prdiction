@@ -178,19 +178,24 @@ elif page == "🔮 Model Prediction":
                 
                 df_input = pd.DataFrame(input_data)
                 
-                for col in df_clean.columns:
-                    if col not in df_input.columns and col != 'benefitsusd2020':
+                train_cols = [c for c in df_clean.columns if c != 'benefitsusd2020']
+                for col in train_cols:
+                    if col not in df_input.columns:
                         if pd.api.types.is_numeric_dtype(df_clean[col]):
                             df_input[col] = 0.0
                         else:
-                            df_input[col] = "N/A"
+                            df_input[col] = "Unspecified"
 
-                train_cols = [c for c in df_clean.columns if c != 'benefitsusd2020']
                 df_input = df_input[train_cols]
 
-                for col in df_input.select_dtypes(include=['object', 'category']).columns:
-                    df_input[col] = df_input[col].astype(str)
+                # Explicitly cast dtypes to match training data exactly
+                for col in train_cols:
+                    if pd.api.types.is_numeric_dtype(df_clean[col]):
+                        df_input[col] = pd.to_numeric(df_input[col], errors='coerce').fillna(0.0)
+                    else:
+                        df_input[col] = df_input[col].astype(str)
 
+                # Execute pipeline transformation and prediction
                 input_processed = preprocessor.transform(df_input)
                 
                 if l1_feature_selector is not None:
