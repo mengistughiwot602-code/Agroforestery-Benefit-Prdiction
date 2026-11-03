@@ -167,19 +167,31 @@ elif page == "🔮 Model Prediction":
 
         if submitted:
             try:
-                df_template = df_clean.drop(columns=['benefitsusd2020'], errors='ignore').iloc[[0]].copy()
+                # Build an explicit input dictionary to prevent isnan casting errors
+                input_data = {
+                    'totalusd2020': [float(totalusd)],
+                    'EcC_total_max': [float(ecc_total_max)],
+                    'EcB_income_max': [float(ecb_income_max)],
+                    'EcB_tree': [float(ecb_tree)],
+                    'curr_EcC_Transplanting': [str(curr_transplanting)],
+                    'curr_EcC_total_max': [str(curr_ecc_total)]
+                }
+                
+                df_input = pd.DataFrame(input_data)
+                
+                # Align with training columns
+                for col in df_clean.columns:
+                    if col not in df_input.columns and col != 'benefitsusd2020':
+                        if pd.api.types.is_numeric_dtype(df_clean[col]):
+                            df_input[col] = 0.0
+                        else:
+                            df_input[col] = "Unspecified"
 
-                df_template['totalusd2020'] = float(totalusd)
-                df_template['EcC_total_max'] = float(ecc_total_max)
-                df_template['EcB_income_max'] = float(ecb_income_max)
-                df_template['EcB_tree'] = float(ecb_tree)
+                train_cols = [c for c in df_clean.columns if c != 'benefitsusd2020']
+                df_input = df_input[train_cols]
 
-                if 'curr_EcC_Transplanting' in df_template.columns:
-                    df_template['curr_EcC_Transplanting'] = str(curr_transplanting)
-                if 'curr_EcC_total_max' in df_template.columns:
-                    df_template['curr_EcC_total_max'] = str(curr_ecc_total)
-
-                input_processed = preprocessor.transform(df_template)
+                # Execute pipeline transformation and prediction
+                input_processed = preprocessor.transform(df_input)
                 
                 if l1_feature_selector is not None:
                     input_processed = l1_feature_selector.transform(input_processed)
