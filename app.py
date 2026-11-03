@@ -99,7 +99,7 @@ try:
     try:
         preprocessor = joblib.load("preprocessor.joblib")
     except:
-        preprocessor = joblib.load("preprocessor.pkl")
+        preprocessor = joblib.load("preprocessor.joblib")
 
     try:
         l1_feature_selector = joblib.load("l1_feature_selector.joblib")
