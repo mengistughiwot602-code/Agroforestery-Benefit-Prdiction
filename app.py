@@ -167,7 +167,6 @@ elif page == "🔮 Model Prediction":
 
         if submitted:
             try:
-                # Build an explicit input dictionary to prevent isnan casting errors
                 input_data = {
                     'totalusd2020': [float(totalusd)],
                     'EcC_total_max': [float(ecc_total_max)],
@@ -179,18 +178,19 @@ elif page == "🔮 Model Prediction":
                 
                 df_input = pd.DataFrame(input_data)
                 
-                # Align with training columns
                 for col in df_clean.columns:
                     if col not in df_input.columns and col != 'benefitsusd2020':
                         if pd.api.types.is_numeric_dtype(df_clean[col]):
                             df_input[col] = 0.0
                         else:
-                            df_input[col] = "Unspecified"
+                            df_input[col] = "N/A"
 
                 train_cols = [c for c in df_clean.columns if c != 'benefitsusd2020']
                 df_input = df_input[train_cols]
 
-                # Execute pipeline transformation and prediction
+                for col in df_input.select_dtypes(include=['object', 'category']).columns:
+                    df_input[col] = df_input[col].astype(str)
+
                 input_processed = preprocessor.transform(df_input)
                 
                 if l1_feature_selector is not None:
