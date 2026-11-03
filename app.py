@@ -1,11 +1,15 @@
 
+import os
+import traceback
+import warnings
+
 import streamlit as st
 import pandas as pd
 import numpy as np
 import joblib
 import plotly.express as px
-import plotly.graph_objects as go
-import os
+
+warnings.filterwarnings("ignore")
 
 # ============================================================
 # 1. PAGE CONFIGURATION
@@ -31,7 +35,6 @@ st.markdown("""
 
     [data-testid="stSidebar"] {
         background-color: #1e3d2f;
-        color: white;
     }
 
     [data-testid="stSidebar"] * {
@@ -98,7 +101,15 @@ def load_data():
         "Costs_and_benefits_of_agroforestry_in_Africa.csv"
     )
 
-    df = pd.read_csv(csv_path, encoding="latin1")
+    if not os.path.exists(csv_path):
+        raise FileNotFoundError(
+            f"Dataset not found: {csv_path}"
+        )
+
+    df = pd.read_csv(
+        csv_path,
+        encoding="latin1"
+    )
 
     df_clean = df.copy()
 
@@ -116,7 +127,6 @@ def load_data():
         "curr_EcB_tree"
     ]
 
-    # Convert non-categorical columns into numeric values.
     for col in df_clean.columns:
 
         if col not in categorical_columns:
@@ -126,7 +136,7 @@ def load_data():
                 errors="coerce"
             )
 
-    # Handle missing target and cost values.
+    # Preserve the original project's missing-value choices.
     if "benefitsusd2020" in df_clean.columns:
         df_clean["benefitsusd2020"] = (
             df_clean["benefitsusd2020"].fillna(99.5)
@@ -137,7 +147,6 @@ def load_data():
             df_clean["totalusd2020"].fillna(152.0)
         )
 
-    # Handle categorical columns.
     for col in categorical_columns:
 
         if col in df_clean.columns:
@@ -148,7 +157,6 @@ def load_data():
                 .astype(str)
             )
 
-    # Handle important numerical variables.
     for col in [
         "EcC_total_max",
         "EcB_income_max",
@@ -167,7 +175,7 @@ def load_data():
 
 
 # ============================================================
-# 5. LOAD MODEL ARTIFACTS
+# 5. MODEL ARTIFACT LOADING
 # ============================================================
 
 def find_model_file(*filenames):
@@ -180,7 +188,8 @@ def find_model_file(*filenames):
             return path
 
     raise FileNotFoundError(
-        f"None of these model files were found: {filenames}"
+        "Could not find any of these model files: "
+        + ", ".join(filenames)
     )
 
 
@@ -207,28 +216,35 @@ try:
 
     preprocessor = joblib.load(preprocessor_path)
 
-    l1_feature_selector = joblib.load(l1_selector_path)
+    l1_feature_selector = joblib.load(
+        l1_selector_path
+    )
 
 except Exception as e:
 
-    st.error(
-        "Error loading assets or data. "
-        "Please ensure all model and dataset files exist "
-        f"in the repository root: {e}"
-    )
+    st.error("Error loading the dataset or model files.")
+
+    st.exception(e)
 
     st.stop()
 
 
 # ============================================================
-# 6. PREDICTION PREPROCESSING FUNCTION
+# 6. INPUT PREPARATION
 # ============================================================
 
-def prepare_prediction_input(df_input, df_reference, preprocessor):
+CATEGORICAL_COLUMNS = {
+    "Country",
+    "Agrofor_practice",
+    "curr_EcC_Transplanting",
+    "curr_EcC_total_max",
+    "curr_EcB_income_max",
+    "curr_EcB_tree"
+}
 
-    df_input = df_input.copy()
 
-    # Use the exact feature names expected by the fitted preprocessor.
+def get_expected_columns(preprocessor):
+
     expected_columns = getattr(
         preprocessor,
         "feature_names_in_",
@@ -236,28 +252,14 @@ def prepare_prediction_input(df_input, df_reference, preprocessor):
     )
 
     if expected_columns is not None:
+        return list(expected_columns)
 
-        expected_columns = list(expected_columns)
+    return None
 
-        missing_columns = [
-            col for col in expected_columns
-            if col not in df_input.columns
-        ]
 
-        if missing_columns:
+def get_numeric_columns(preprocessor):
 
-            raise ValueError(
-                "Missing features required by the trained model: "
-                f"{missing_columns}"
-            )
-
-        df_input = df_input.reindex(
-            columns=expected_columns
-        )
-
-    # Identify numerical columns expected by the fitted
-    # ColumnTransformer, where possible.
-    numeric_model_columns = set()
+    numeric_columns = set()
 
     transformers = getattr(
         preprocessor,
@@ -265,55 +267,39 @@ def prepare_prediction_input(df_input, df_reference, preprocessor):
         []
     )
 
-    for transformer_name, transformer, selected_columns in transformers:
+    for name, transformer, columns in transformers:
 
-        if transformer_name == "remainder":
+        if name == "remainder":
             continue
 
         if isinstance(transformer, str):
             continue
 
-        if isinstance(selected_columns, slice):
+        if isinstance(columns, slice):
+            continue
 
-            selected = list(
-                df_input.columns[selected_columns]
-            )
+        if isinstance(columns, (list, tuple, np.ndarray, pd.Index)):
 
-        elif isinstance(
-            selected_columns,
-            (list, tuple, np.ndarray, pd.Index)
-        ):
+            selected_columns = list(columns)
 
-            selected = list(selected_columns)
-
-            if selected and isinstance(
-                selected[0],
+            if selected_columns and isinstance(
+                selected_columns[0],
                 (bool, np.bool_)
             ):
+                continue
 
-                selected = list(
-                    df_input.columns[
-                        np.asarray(selected, dtype=bool)
-                    ]
-                )
-
-            elif selected and isinstance(
-                selected[0],
+            if selected_columns and isinstance(
+                selected_columns[0],
                 (int, np.integer)
             ):
+                continue
 
-                selected = [
-                    df_input.columns[int(i)]
-                    for i in selected
-                ]
+        elif isinstance(columns, str):
+
+            selected_columns = [columns]
 
         else:
-
-            selected = (
-                [selected_columns]
-                if selected_columns in df_input.columns
-                else []
-            )
+            continue
 
         steps = getattr(
             transformer,
@@ -322,12 +308,12 @@ def prepare_prediction_input(df_input, df_reference, preprocessor):
         )
 
         step_names = " ".join(
-            str(name).lower()
-            for name, _ in steps
+            str(step_name).lower()
+            for step_name, _ in steps
         )
 
-        transformer_text = (
-            str(transformer_name).lower()
+        transformer_description = (
+            str(name).lower()
             + " "
             + transformer.__class__.__name__.lower()
             + " "
@@ -342,29 +328,70 @@ def prepare_prediction_input(df_input, df_reference, preprocessor):
 
         if (
             any(
-                token in transformer_text
-                for token in (
+                keyword in transformer_description
+                for keyword in [
                     "numeric",
                     "num",
                     "scal",
                     "standard"
-                )
+                ]
             )
             or has_numeric_imputer
         ):
 
-            numeric_model_columns.update(selected)
+            numeric_columns.update(
+                selected_columns
+            )
 
-    categorical_columns = {
-        "Country",
-        "Agrofor_practice",
-        "curr_EcC_Transplanting",
-        "curr_EcC_total_max",
-        "curr_EcB_income_max",
-        "curr_EcB_tree"
-    }
+    return numeric_columns
 
-    # Convert all features into consistent data types.
+
+def prepare_prediction_input(
+    df_input,
+    df_reference,
+    preprocessor
+):
+
+    df_input = df_input.copy()
+
+    expected_columns = get_expected_columns(
+        preprocessor
+    )
+
+    if expected_columns is not None:
+
+        missing_columns = [
+            col for col in expected_columns
+            if col not in df_input.columns
+        ]
+
+        if missing_columns:
+
+            raise ValueError(
+                "The following required model features are missing: "
+                + str(missing_columns)
+            )
+
+        df_input = df_input.reindex(
+            columns=expected_columns
+        )
+
+    numeric_columns = get_numeric_columns(
+        preprocessor
+    )
+
+    # Add columns that were numeric in the reference dataset.
+    for col in df_input.columns:
+
+        if (
+            col in df_reference.columns
+            and pd.api.types.is_numeric_dtype(
+                df_reference[col]
+            )
+        ):
+            numeric_columns.add(col)
+
+    # Convert each column carefully.
     for col in df_input.columns:
 
         series = df_input[col].replace(
@@ -379,72 +406,51 @@ def prepare_prediction_input(df_input, df_reference, preprocessor):
             np.nan
         )
 
-        must_be_numeric = (
-            col in numeric_model_columns
-            or (
-                col in df_reference.columns
-                and pd.api.types.is_numeric_dtype(
-                    df_reference[col]
-                )
-            )
-        )
-
-        if must_be_numeric:
-
-            converted = pd.to_numeric(
-                series,
-                errors="coerce"
-            )
-
-            df_input[col] = (
-                converted
-                .replace(
-                    [np.inf, -np.inf],
-                    np.nan
-                )
-                .fillna(0.0)
-                .astype(float)
-            )
-
-        elif col in categorical_columns:
-
-            df_input[col] = (
-                series
-                .fillna("Unspecified")
-                .astype(str)
-            )
-
-        elif not pd.api.types.is_numeric_dtype(series):
-
-            # Preserve non-numeric features as categorical text.
-            df_input[col] = (
-                series
-                .fillna("Unspecified")
-                .astype(str)
-            )
-
-        else:
+        if col in numeric_columns:
 
             df_input[col] = (
                 pd.to_numeric(
                     series,
                     errors="coerce"
                 )
+                .replace(
+                    [np.inf, -np.inf],
+                    np.nan
+                )
                 .fillna(0.0)
+                .astype(np.float64)
             )
 
-    # Final numeric validation.
-    for col in numeric_model_columns:
+        elif col in CATEGORICAL_COLUMNS:
 
-        if col in df_input.columns:
+            df_input[col] = (
+                series
+                .fillna("Unspecified")
+                .astype(str)
+            )
 
-            df_input[col] = pd.to_numeric(
-                df_input[col],
-                errors="coerce"
-            ).replace(
-                [np.inf, -np.inf],
-                np.nan
-            ).fillna(0.0).astype(float)
+        elif pd.api.types.is_numeric_dtype(series):
+
+            df_input[col] = (
+                pd.to_numeric(
+                    series,
+                    errors="coerce"
+                )
+                .replace(
+                    [np.inf, -np.inf],
+                    np.nan
+                )
+                .fillna(0.0)
+                .astype(np.float64)
+            )
+
+        else:
+
+            df_input[col] = (
+                series
+                .fillna("Unspecified")
+                .astype(str)
+            )
 
     return df_input
 
@@ -455,10 +461,10 @@ def prepare_prediction_input(df_input, df_reference, preprocessor):
 
 with st.sidebar:
 
-    st.title("Navigation")
+    st.title("🌳 Agroforestry Analytics")
 
     page = st.radio(
-        "Go to:",
+        "Navigate Dashboard",
         [
             "📋 Data Overview",
             "📊 Visualizations",
@@ -471,10 +477,21 @@ with st.sidebar:
     st.subheader("📁 Model Artifacts")
 
     st.markdown("""
-    - **Model File:** `rf_agroforestry_model.joblib`
-    - **Preprocessor:** `preprocessor.joblib`
-    - **Feature Selection:** `l1_feature_selector.pkl`
-    - **R-squared Score:** `~0.7787`
+    **Random Forest Model**
+
+    `rf_agroforestry_model.joblib`
+
+    **Preprocessing Pipeline**
+
+    `preprocessor.joblib`
+
+    **Feature Selector**
+
+    `l1_feature_selector.pkl`
+
+    **Reported R-squared**
+
+    `~0.7787`
     """)
 
 
@@ -487,7 +504,7 @@ if page == "📋 Data Overview":
     st.title("🌳 Agroforestry Benefits Prediction")
 
     st.subheader(
-        "Project Overview & Data Insights"
+        "Project Overview and Data Insights"
     )
 
     col1, col2, col3 = st.columns(3)
@@ -510,6 +527,12 @@ if page == "📋 Data Overview":
 
     with col2:
 
+        country_count = (
+            df_clean["Country"].nunique()
+            if "Country" in df_clean.columns
+            else 0
+        )
+
         st.markdown(
             f"""
             <div class="metric-card">
@@ -517,7 +540,7 @@ if page == "📋 Data Overview":
                     Unique Countries
                 </div>
                 <div class="metric-value">
-                    {df_clean["Country"].nunique()}
+                    {country_count}
                 </div>
             </div>
             """,
@@ -526,6 +549,12 @@ if page == "📋 Data Overview":
 
     with col3:
 
+        median_benefits = (
+            df_clean["benefitsusd2020"].median()
+            if "benefitsusd2020" in df_clean.columns
+            else 0
+        )
+
         st.markdown(
             f"""
             <div class="metric-card">
@@ -533,7 +562,7 @@ if page == "📋 Data Overview":
                     Median Benefits (USD 2020)
                 </div>
                 <div class="metric-value">
-                    ${df_clean["benefitsusd2020"].median():,.2f}
+                    ${median_benefits:,.2f}
                 </div>
             </div>
             """,
@@ -547,6 +576,31 @@ if page == "📋 Data Overview":
         use_container_width=True
     )
 
+    st.markdown("### Dataset Statistics")
+
+    st.dataframe(
+        df_clean.describe(include="all").transpose(),
+        use_container_width=True
+    )
+
+    st.markdown("### Missing Values")
+
+    missing_values = (
+        df_clean.isnull()
+        .sum()
+        .reset_index()
+    )
+
+    missing_values.columns = [
+        "Feature",
+        "Missing Values"
+    ]
+
+    st.dataframe(
+        missing_values,
+        use_container_width=True
+    )
+
 
 # ============================================================
 # 9. PAGE 2: VISUALIZATIONS
@@ -554,65 +608,131 @@ if page == "📋 Data Overview":
 
 elif page == "📊 Visualizations":
 
-    st.title("📈 Interactive Data Visualizations")
+    st.title("📊 Interactive Data Visualizations")
 
-    tab1, tab2 = st.tabs(
+    tab1, tab2, tab3 = st.tabs(
         [
-            "Country Distributions",
+            "Country Distribution",
+            "Benefits Distribution",
             "Feature Relationships"
         ]
     )
 
     with tab1:
 
-        st.subheader(
-            "Count of Entries per Country"
-        )
+        if "Country" in df_clean.columns:
 
-        fig_country = px.histogram(
-            df_clean,
-            y="Country",
-            color="Country",
-            title="Dataset Volume by Country",
-            height=600
-        )
+            st.subheader(
+                "Number of Observations by Country"
+            )
 
-        fig_country.update_layout(
-            showlegend=False,
-            title_x=0.5
-        )
+            country_counts = (
+                df_clean["Country"]
+                .value_counts()
+                .reset_index()
+            )
 
-        st.plotly_chart(
-            fig_country,
-            use_container_width=True
-        )
+            country_counts.columns = [
+                "Country",
+                "Observations"
+            ]
+
+            fig_country = px.bar(
+                country_counts,
+                x="Country",
+                y="Observations",
+                color="Country",
+                title="Dataset Volume by Country"
+            )
+
+            fig_country.update_layout(
+                title_x=0.5
+            )
+
+            st.plotly_chart(
+                fig_country,
+                use_container_width=True
+            )
 
     with tab2:
 
-        st.subheader(
-            "Benefit Distribution (Target Variable)"
+        if "benefitsusd2020" in df_clean.columns:
+
+            st.subheader(
+                "Distribution of Agroforestry Benefits"
+            )
+
+            fig_dist = px.histogram(
+                df_clean,
+                x="benefitsusd2020",
+                nbins=30,
+                marginal="rug",
+                title="Benefits Distribution (USD 2020)",
+                color_discrete_sequence=["#2e6f40"]
+            )
+
+            fig_dist.update_layout(
+                title_x=0.5
+            )
+
+            st.plotly_chart(
+                fig_dist,
+                use_container_width=True
+            )
+
+            st.write(
+                "Benefits summary statistics"
+            )
+
+            st.dataframe(
+                df_clean["benefitsusd2020"].describe()
+            )
+
+    with tab3:
+
+        numeric_df = df_clean.select_dtypes(
+            include=np.number
         )
 
-        fig_dist = px.histogram(
-            df_clean,
-            x="benefitsusd2020",
-            nbins=30,
-            marginal="rug",
-            title=(
-                "Distribution of Agroforestry Benefits "
-                "(USD 2020)"
-            ),
-            color_discrete_sequence=["#2e6f40"]
+        numeric_columns = list(
+            numeric_df.columns
         )
 
-        fig_dist.update_layout(
-            title_x=0.5
-        )
+        if len(numeric_columns) >= 2:
 
-        st.plotly_chart(
-            fig_dist,
-            use_container_width=True
-        )
+            x_feature = st.selectbox(
+                "Select X variable",
+                numeric_columns
+            )
+
+            y_feature = st.selectbox(
+                "Select Y variable",
+                numeric_columns,
+                index=min(1, len(numeric_columns) - 1)
+            )
+
+            fig_relationship = px.scatter(
+                df_clean,
+                x=x_feature,
+                y=y_feature,
+                color="Country"
+                if "Country" in df_clean.columns
+                else None,
+                title=f"{x_feature} vs {y_feature}",
+                trendline="ols"
+            )
+
+            st.plotly_chart(
+                fig_relationship,
+                use_container_width=True
+            )
+
+        else:
+
+            st.info(
+                "There are not enough numerical columns "
+                "to display relationships."
+            )
 
 
 # ============================================================
@@ -621,77 +741,97 @@ elif page == "📊 Visualizations":
 
 elif page == "🔮 Model Prediction":
 
-    st.title("🔮 Forecast Economic Benefits")
+    st.title("🔮 Forecast Agroforestry Economic Benefits")
 
     st.write(
-        "Enter predictive variables below to estimate "
-        "predicted agroforestry benefits in USD (2020)."
+        "Enter the required information below to estimate "
+        "agroforestry benefits in USD (2020)."
     )
+
+    # --------------------------------------------------------
+    # Prediction Form
+    # --------------------------------------------------------
 
     with st.form("prediction_form"):
 
-        st.write("#### Input Features")
+        st.subheader("Input Features")
 
         col_left, col_right = st.columns(2)
 
         with col_left:
 
             totalusd = st.number_input(
-                "Total USD 2020 (totalusd2020)",
+                "Total USD 2020",
                 min_value=0.0,
-                value=152.0
+                value=152.0,
+                step=1.0
             )
 
             ecc_total_max = st.number_input(
-                "Max Economic Cost (EcC_total_max)",
+                "Maximum Economic Cost",
                 min_value=0.0,
-                value=0.0
+                value=0.0,
+                step=1.0
             )
 
             ecb_income_max = st.number_input(
-                "Max Economic Benefit Income (EcB_income_max)",
+                "Maximum Economic Benefit Income",
                 min_value=0.0,
-                value=0.0
+                value=0.0,
+                step=1.0
             )
 
         with col_right:
 
             ecb_tree = st.number_input(
-                "Tree Benefits Value (EcB_tree)",
+                "Tree Benefits Value",
                 min_value=0.0,
-                value=0.0
+                value=0.0,
+                step=1.0
             )
+
+            currency_options = [
+                "N/A",
+                "GH₵ ha-1",
+                "FCFA ha-1",
+                "US$ ha-1"
+            ]
 
             curr_transplanting = st.selectbox(
                 "Transplanting Currency Context",
-                [
-                    "N/A",
-                    "GH₵ ha-1",
-                    "FCFA ha-1",
-                    "US$ ha-1"
-                ]
+                currency_options
             )
 
             curr_ecc_total = st.selectbox(
-                "Max Cost Currency Context",
-                [
-                    "N/A",
-                    "GH₵ ha-1",
-                    "FCFA ha-1",
-                    "US$ ha-1"
-                ]
+                "Maximum Cost Currency Context",
+                currency_options
             )
 
         submitted = st.form_submit_button(
-            "Predict"
+            "🔮 Predict Benefits",
+            use_container_width=True
         )
+
+    # --------------------------------------------------------
+    # Execute Prediction
+    # --------------------------------------------------------
 
     if submitted:
 
         try:
 
-            # Start with a reference observation to preserve
-            # the original dataset feature structure.
+            if df_clean.empty:
+                raise ValueError(
+                    "The dataset contains no observations."
+                )
+
+            if "benefitsusd2020" not in df_clean.columns:
+                raise ValueError(
+                    "The target column benefitsusd2020 "
+                    "is missing from the dataset."
+                )
+
+            # Start from a real dataset observation.
             df_input = (
                 df_clean
                 .drop(
@@ -702,45 +842,42 @@ elif page == "🔮 Model Prediction":
                 .copy()
             )
 
-            # Insert user-provided numerical values.
-            df_input["totalusd2020"] = float(totalusd)
-
-            df_input["EcC_total_max"] = float(
-                ecc_total_max
-            )
-
-            df_input["EcB_income_max"] = float(
-                ecb_income_max
-            )
-
-            df_input["EcB_tree"] = float(
-                ecb_tree
-            )
-
-            # Insert categorical currency values.
-            if "curr_EcC_Transplanting" in df_input.columns:
-
-                df_input["curr_EcC_Transplanting"] = str(
+            # Apply user-entered values.
+            user_values = {
+                "totalusd2020": float(totalusd),
+                "EcC_total_max": float(ecc_total_max),
+                "EcB_income_max": float(ecb_income_max),
+                "EcB_tree": float(ecb_tree),
+                "curr_EcC_Transplanting": str(
                     curr_transplanting
-                )
-
-            if "curr_EcC_total_max" in df_input.columns:
-
-                df_input["curr_EcC_total_max"] = str(
+                ),
+                "curr_EcC_total_max": str(
                     curr_ecc_total
                 )
+            }
 
-            # Prepare input for the trained preprocessor.
+            for feature, value in user_values.items():
+
+                if feature in df_input.columns:
+                    df_input.loc[
+                        df_input.index[0],
+                        feature
+                    ] = value
+
+            # Prepare the input.
             df_input = prepare_prediction_input(
                 df_input,
                 df_clean,
                 preprocessor
             )
 
-            st.write("### Input validation")
+            st.success(
+                "Input preparation completed."
+            )
 
+            # Show input diagnostics.
             with st.expander(
-                "View processed prediction input"
+                "View model input and data types"
             ):
 
                 st.dataframe(
@@ -748,16 +885,43 @@ elif page == "🔮 Model Prediction":
                     use_container_width=True
                 )
 
-                st.write(
-                    df_input.dtypes.astype(str)
+                st.write("Feature data types:")
+
+                st.dataframe(
+                    pd.DataFrame({
+                        "Feature": df_input.columns,
+                        "Data Type": [
+                            str(dtype)
+                            for dtype in df_input.dtypes
+                        ],
+                        "Input Value": [
+                            str(df_input.iloc[0][col])
+                            for col in df_input.columns
+                        ]
+                    }),
+                    use_container_width=True
                 )
 
-            # Execute preprocessing.
+            # -----------------------------------------------
+            # PREPROCESSING
+            # -----------------------------------------------
+
+            st.write(
+                "### Step 1: Preprocessing"
+            )
+
             input_processed = preprocessor.transform(
                 df_input
             )
 
-            # Apply trained feature selector.
+            # -----------------------------------------------
+            # FEATURE SELECTION
+            # -----------------------------------------------
+
+            st.write(
+                "### Step 2: Feature Selection"
+            )
+
             if l1_feature_selector is not None:
 
                 input_processed = (
@@ -766,41 +930,78 @@ elif page == "🔮 Model Prediction":
                     )
                 )
 
-            # Predict economic benefits.
+            # -----------------------------------------------
+            # MODEL PREDICTION
+            # -----------------------------------------------
+
+            st.write(
+                "### Step 3: Random Forest Prediction"
+            )
+
             prediction = rf_model.predict(
                 input_processed
             )[0]
 
+            # -----------------------------------------------
+            # RESULT
+            # -----------------------------------------------
+
             st.success(
-                f"### 🎉 Predicted Economic Benefits: "
+                f"🎉 Predicted Economic Benefits: "
                 f"${prediction:,.2f} USD (2020)"
+            )
+
+            st.metric(
+                "Predicted Agroforestry Benefits",
+                f"${prediction:,.2f}"
+            )
+
+            st.caption(
+                "Prediction generated using the loaded "
+                "preprocessor, feature selector, and "
+                "Random Forest model."
             )
 
         except Exception as ex:
 
             st.error(
-                "Error executing model pipeline preprocessing: "
-                f"{ex}"
+                "The prediction pipeline encountered an error."
             )
 
+            st.error(str(ex))
+
+            # Full traceback is essential for identifying
+            # the exact transformer causing the error.
             with st.expander(
-                "Technical diagnostics"
+                "Full Technical Error and Traceback",
+                expanded=True
             ):
 
-                st.write(
-                    "Input feature data types:"
+                st.code(
+                    traceback.format_exc(),
+                    language="python"
                 )
+
+            # Additional input diagnostics.
+            with st.expander(
+                "Input Data Diagnostics",
+                expanded=True
+            ):
 
                 try:
 
+                    st.write(
+                        "Input feature data types:"
+                    )
+
                     st.dataframe(
                         pd.DataFrame({
-                            "feature": df_input.columns,
-                            "dtype": [
+                            "Feature": df_input.columns,
+                            "Data Type": [
                                 str(dtype)
                                 for dtype in df_input.dtypes
                             ],
-                            "sample_value": [
+                            "Sample Value": [
                                 str(df_input.iloc[0][col])
                                 for col in df_input.columns
                             ]
@@ -808,17 +1009,50 @@ elif page == "🔮 Model Prediction":
                         use_container_width=True
                     )
 
-                except Exception:
-
-                    st.caption(
-                        "Input diagnostics are unavailable."
+                    st.write(
+                        "Preprocessor expected features:"
                     )
 
-                st.caption(
-                    "If the error persists, the model artifacts "
-                    "may have been trained using a different "
-                    "feature schema or scikit-learn version."
-                )
+                    st.write(
+                        getattr(
+                            preprocessor,
+                            "feature_names_in_",
+                            "Not available"
+                        )
+                    )
+
+                    st.write(
+                        "Preprocessor class:"
+                    )
+
+                    st.write(
+                        type(preprocessor).__name__
+                    )
+
+                    st.write(
+                        "Preprocessor configuration:"
+                    )
+
+                    try:
+
+                        st.write(
+                            preprocessor.get_params(
+                                deep=True
+                            )
+                        )
+
+                    except Exception as diagnostic_error:
+
+                        st.write(
+                            str(diagnostic_error)
+                        )
+
+                except Exception as diagnostic_error:
+
+                    st.warning(
+                        "Could not display input diagnostics: "
+                        + str(diagnostic_error)
+                    )
 
 
 # ============================================================
@@ -829,7 +1063,9 @@ st.markdown(
     """
     <div class="footer">
         Agroforestry Benefits Analytics Dashboard
-        • Built with Streamlit, Pandas & Scikit-Learn
+        <br>
+        Built with Streamlit, Pandas, NumPy,
+        Plotly and Scikit-Learn
     </div>
     """,
     unsafe_allow_html=True
