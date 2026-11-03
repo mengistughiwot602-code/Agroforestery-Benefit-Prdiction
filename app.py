@@ -67,7 +67,7 @@ st.markdown("""
 # --- Base Directory Pathing ---
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-# --- Load Dataset & Trained Models with Robust Paths & Rigorous Dtype Coercion ---
+# --- Load Dataset & Trained Models with Robust Paths ---
 @st.cache_data
 def load_data():
     csv_path = os.path.join(BASE_DIR, "Costs_and_benefits_of_agroforestry_in_Africa.csv")
@@ -75,18 +75,18 @@ def load_data():
     df_clean = df.copy()
     df_clean = df_clean.drop(columns=['nbr'], errors='ignore')
     
-    # Define known categorical columns
-    categorical_cols = ['Country', 'Agrofor_practice', 'curr_EcC_Transplanting', 'curr_EcC_total_max', 'curr_EcB_income_max', 'curr_EcB_tree']
-    
-    # Rigorously coerce all other columns to numeric float to prevent isnan casting errors
+    # Clean numeric columns cleanly
     for col in df_clean.columns:
-        if col not in categorical_cols:
-            df_clean[col] = pd.to_numeric(df_clean[col], errors='coerce').fillna(0.0)
-        else:
-            df_clean[col] = df_clean[col].fillna('Unspecified').astype(str)
+        if col not in ['Country', 'Agrofor_practice', 'curr_EcC_Transplanting', 'curr_EcC_total_max', 'curr_EcB_income_max', 'curr_EcB_tree']:
+            df_clean[col] = pd.to_numeric(df_clean[col], errors='coerce')
 
     df_clean['benefitsusd2020'] = df_clean['benefitsusd2020'].fillna(99.5)
     df_clean['totalusd2020'] = df_clean['totalusd2020'].fillna(152.0)
+    df_clean['Country'] = df_clean['Country'].fillna('Unspecified').astype(str)
+    df_clean['Agrofor_practice'] = df_clean['Agrofor_practice'].fillna('Unspecified').astype(str)
+    df_clean['EcC_total_max'] = df_clean['EcC_total_max'].fillna(0.0)
+    df_clean['EcB_income_max'] = df_clean['EcB_income_max'].fillna(0.0)
+    df_clean['EcB_tree'] = df_clean['EcB_tree'].fillna(0.0)
     return df_clean
 
 try:
@@ -173,35 +173,28 @@ elif page == "🔮 Model Prediction":
 
         if submitted:
             try:
-                train_cols = [c for c in df_clean.columns if c != 'benefitsusd2020']
+                # Take a clean reference row from df_clean to inherit exact dtypes and columns
+                df_input = df_clean.drop(columns=['benefitsusd2020']).iloc[[0]].copy()
 
-                input_data = {
-                    'totalusd2020': float(totalusd),
-                    'EcC_total_max': float(ecc_total_max),
-                    'EcB_income_max': float(ecb_income_max),
-                    'EcB_tree': float(ecb_tree),
-                    'curr_EcC_Transplanting': str(curr_transplanting),
-                    'curr_EcC_total_max': str(curr_ecc_total)
-                }
+                # Override with user inputs safely
+                df_input['totalusd2020'] = float(totalusd)
+                df_input['EcC_total_max'] = float(ecc_total_max)
+                df_input['EcB_income_max'] = float(ecb_income_max)
+                df_input['EcB_tree'] = float(ecb_tree)
+                
+                if 'curr_EcC_Transplanting' in df_input.columns:
+                    df_input['curr_EcC_Transplanting'] = str(curr_transplanting)
+                if 'curr_EcC_total_max' in df_input.columns:
+                    df_input['curr_EcC_total_max'] = str(curr_ecc_total)
 
-                df_input = pd.DataFrame([input_data])
-                for col in train_cols:
-                    if col not in df_input.columns:
-                        if pd.api.types.is_numeric_dtype(df_clean[col]):
-                            df_input[col] = 0.0
-                        else:
-                            df_input[col] = "N/A"
-
-                df_input = df_input[train_cols]
-
-                # Guaranteed strict type casting based on training dtypes
-                categorical_cols = ['Country', 'Agrofor_practice', 'curr_EcC_Transplanting', 'curr_EcC_total_max', 'curr_EcB_income_max', 'curr_EcB_tree']
-                for col in train_cols:
-                    if col in categorical_cols:
-                        df_input[col] = df_input[col].fillna("N/A").astype(str)
+                # Ensure strict adherence to original dtypes from df_clean template row
+                for col in df_input.columns:
+                    if pd.api.types.is_numeric_dtype(df_clean[col]):
+                        df_input[col] = pd.to_numeric(df_input[col], errors='coerce').fillna(0.0)
                     else:
-                        df_input[col] = pd.to_numeric(df_input[col], errors='coerce').fillna(0.0).astype(float)
+                        df_input[col] = df_input[col].astype(str)
 
+                # Execute pipeline transformation and prediction
                 input_processed = preprocessor.transform(df_input)
                 
                 if l1_feature_selector is not None:
