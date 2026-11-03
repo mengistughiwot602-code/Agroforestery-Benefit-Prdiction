@@ -1,3 +1,4 @@
+%%writefile app.py
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -81,7 +82,7 @@ def load_data():
     df_clean = df.copy()
     df_clean.drop('nbr', axis=1, errors='ignore', inplace=True)
     df_clean['benefitsusd2020'] = pd.to_numeric(df_clean['benefitsusd2020'], errors='coerce').fillna(99.5)
-    df_clean['totalusd2020'] = pd.to_numeric(df_clean['totalusd2020'], errors='coerce').fillna(df_clean['totalusd2020'].median() if 'totalusd2020' in df_clean else 152.0)
+    df_clean['totalusd2020'] = pd.to_numeric(df_clean['totalusd2020'], errors='coerce').fillna(152.0)
     df_clean['Country'] = df_clean['Country'].fillna('Unspecified')
     df_clean['Agrofor_practice'] = df_clean['Agrofor_practice'].fillna('Unspecified')
     df_clean['EcC_total_max'] = pd.to_numeric(df_clean['EcC_total_max'], errors='coerce').fillna(0)
@@ -91,12 +92,12 @@ def load_data():
 
 try:
     df_clean = load_data()
-    
+
     # Dynamic loading of saved joblib and pickle models with robustness
     rf_model_path = "rf_agroforestry_model.joblib" if os.path.exists("rf_agroforestry_model.joblib") else "rf_agroforestry_model.pkl"
     preprocessor_path = "preprocessor.joblib" if os.path.exists("preprocessor.joblib") else "preprocessor.pkl"
     l1_selector_path = "l1_feature_selector.pkl" if os.path.exists("l1_feature_selector.pkl") else "l1_feature_selector.joblib"
-    
+
     rf_model = joblib.load(rf_model_path)
     preprocessor = joblib.load(preprocessor_path)
     l1_feature_selector = joblib.load(l1_selector_path)
@@ -112,7 +113,7 @@ with st.sidebar:
     page = st.radio("Go to:", ["📋 Data Overview", "📊 Visualizations", "🔮 Model Prediction"])
 
     st.markdown("---")
-    st.subheader("📂 Model Artifacts & Resources")
+    st.subheader("📁 Model Artifacts & Resources")
     st.markdown("""
     - **Model File**: `rf_agroforestry_model.joblib`
     - **Preprocessor Pipeline**: `preprocessor.joblib`
@@ -129,4 +130,93 @@ if page == "📋 Data Overview":
 
     col1, col2, col3 = st.columns(3)
     with col1:
-        st.markdown('<div class=
+        st.markdown(f'<div class="metric-card"><div class="metric-title">Total Observations</div><div class="metric-value">{len(df_clean)}</div></div>', unsafe_allow_html=True)
+    with col2:
+        st.markdown(f'<div class="metric-card"><div class="metric-title">Unique Countries</div><div class="metric-value">{df_clean["Country"].nunique()}</div></div>', unsafe_allow_html=True)
+    with col3:
+        st.markdown(f'<div class="metric-card"><div class="metric-title">Median Benefits (USD 2020)</div><div class="metric-value">${df_clean["benefitsusd2020"].median():,.2f}</div></div>', unsafe_allow_html=True)
+
+    st.markdown("### Dataset Preview")
+    st.dataframe(df_clean.head(50), use_container_width=True)
+
+    st.markdown("### Key Feature Description (Lasso & RFE Top Selected Features)")
+    st.write("Our models utilize Recursive Feature Elimination (RFE) and L1 Regularization (Lasso) to select the most predictive attributes: Total Cost/Benefit values (totalusd2020, EcC_total_max, EcB_income_max, EcB_tree) which are optimized via Standard Scaling and One-Hot Encoding.")
+
+# --- PAGE 2: VISUALIZATIONS ---
+elif page == "📊 Visualizations":
+    st.title("📈 Interactive Data Visualizations")
+    st.write("Explore dataset metrics, volume distribution by country, and financial indicators.")
+
+    tab1, tab2 = st.tabs(["Country Distributions", "Feature Relationships"])
+
+    with tab1:
+        st.subheader("Count of Entries per Country")
+        fig_country = px.histogram(
+            df_clean,
+            y="Country",
+            color="Country",
+            title="Dataset Volume by Country",
+            height=600
+        )
+        fig_country.update_layout(showlegend=False, title_x=0.5)
+        st.plotly_chart(fig_country, use_container_width=True)
+
+    with tab2:
+        st.subheader("Benefit Distribution (Target Variable)")
+        fig_dist = px.histogram(
+            df_clean,
+            x="benefitsusd2020",
+            nbins=30,
+            marginal="rug",
+            title="Distribution of Agroforestry Benefits (USD 2020)",
+            color_discrete_sequence=['#2e6f40']
+        )
+        fig_dist.update_layout(title_x=0.5)
+        st.plotly_chart(fig_dist, use_container_width=True)
+
+# --- PAGE 3: MODEL PREDICTION ---
+elif page == "🔮 Model Prediction":
+    st.title("🔮 Forecast Economic Benefits")
+    st.write("Enter predictive variables below to estimate predicted agroforestry benefits in USD (2020).")
+
+    with st.form("prediction_form"):
+        st.write("#### Input Features")
+        col_left, col_right = st.columns(2)
+
+        with col_left:
+            totalusd = st.number_input("Total USD 2020 (totalusd2020)", min_value=0.0, value=152.0)
+            ecc_total_max = st.number_input("Max Economic Cost (EcC_total_max)", min_value=0.0, value=0.0)
+            ecb_income_max = st.number_input("Max Economic Benefit Income (EcB_income_max)", min_value=0.0, value=0.0)
+        with col_right:
+            ecb_tree = st.number_input("Tree Benefits Value (EcB_tree)", min_value=0.0, value=0.0)
+            curr_transplanting = st.selectbox("Transplanting Currency Context", ["N/A", "GH? ha-1", "FCFA ha-1", "US$ ha-1"])
+            curr_ecc_total = st.selectbox("Max Cost Currency Context", ["N/A", "GH? ha-1", "FCFA ha-1", "US$ ha-1"])
+
+        submitted = st.form_submit_button("Predict")
+
+        if submitted:
+            # Setup complete model inputs matching the preprocessing schema
+            # Create an empty input frame conforming to training shape 
+            df_template = df_clean.drop(columns=['benefitsusd2020'], errors='ignore').iloc[[0]].copy()
+
+            df_template['totalusd2020'] = totalusd
+            df_template['EcC_total_max'] = ecc_total_max
+            df_template['EcB_income_max'] = ecb_income_max
+            df_template['EcB_tree'] = ecb_tree
+            if 'curr_EcC_Transplanting' in df_template.columns:
+                df_template['curr_EcC_Transplanting'] = curr_transplanting
+            if 'curr_EcC_total_max' in df_template.columns:
+                df_template['curr_EcC_total_max'] = curr_ecc_total
+
+            try:
+                # Transform and select features dynamically
+                input_processed = preprocessor.transform(df_template)
+                input_processed_l1 = l1_feature_selector.transform(input_processed)
+                prediction = rf_model.predict(input_processed_l1)[0]
+
+                st.success(f"### 🎉 Predicted Economic Benefits: ${prediction:,.2f} USD (2020)")
+            except Exception as ex:
+                st.error(f"Error executing model pipeline preprocessing: {ex}")
+
+# --- Footer ---
+st.markdown('<div class="footer">Agroforestry Benefits Analytics Dashboard • Built with Streamlit, Pandas & Scikit-Learn</div>', unsafe_allow_html=True)
