@@ -167,35 +167,34 @@ elif page == "🔮 Model Prediction":
 
         if submitted:
             try:
-                input_data = {
-                    'totalusd2020': [float(totalusd)],
-                    'EcC_total_max': [float(ecc_total_max)],
-                    'EcB_income_max': [float(ecb_income_max)],
-                    'EcB_tree': [float(ecb_tree)],
-                    'curr_EcC_Transplanting': [str(curr_transplanting)],
-                    'curr_EcC_total_max': [str(curr_ecc_total)]
-                }
-                
-                df_input = pd.DataFrame(input_data)
-                
                 train_cols = [c for c in df_clean.columns if c != 'benefitsusd2020']
+
+                input_data = {
+                    'totalusd2020': float(totalusd),
+                    'EcC_total_max': float(ecc_total_max),
+                    'EcB_income_max': float(ecb_income_max),
+                    'EcB_tree': float(ecb_tree),
+                    'curr_EcC_Transplanting': str(curr_transplanting),
+                    'curr_EcC_total_max': str(curr_ecc_total)
+                }
+
+                df_input = pd.DataFrame([input_data])
                 for col in train_cols:
                     if col not in df_input.columns:
                         if pd.api.types.is_numeric_dtype(df_clean[col]):
                             df_input[col] = 0.0
                         else:
-                            df_input[col] = "Unspecified"
+                            df_input[col] = "N/A"
 
                 df_input = df_input[train_cols]
 
-                # Robustly coerce types based on training data dtypes
+                # Strict type casting: enforce float for numerics, string for categoricals
                 for col in train_cols:
                     if pd.api.types.is_numeric_dtype(df_clean[col]):
-                        df_input[col] = pd.to_numeric(df_input[col], errors='coerce').fillna(0.0)
+                        df_input[col] = pd.to_numeric(df_input[col], errors='coerce').fillna(0.0).astype(float)
                     else:
-                        df_input[col] = df_input[col].astype(str).replace('Unspecified', 'N/A')
+                        df_input[col] = df_input[col].fillna("N/A").astype(str)
 
-                # Execute pipeline transformation and prediction
                 input_processed = preprocessor.transform(df_input)
                 
                 if l1_feature_selector is not None:
