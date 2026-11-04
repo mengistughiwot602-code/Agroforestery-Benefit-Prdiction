@@ -202,10 +202,10 @@ elif page == "🔮 Prediction of Benefits":
             EcB_income_max = st.slider("Max Economic Benefit Income (EcB_income_max)", min_value=0.0, max_value=50000.0, value=4050.0, step=10.0)
         with c_r:
             EcB_tree = st.slider("Tree Benefits Value (EcB_tree)", min_value=0.0, max_value=30000.0, value=650.0, step=10.0)
-            curr_transplanting = st.selectbox("Transplanting Currency Context", ["N/A", "GH? ha-1", "FCFA ha-1", "US$ ha-1"])
-            curr_ecc_total = st.selectbox("Max Cost Currency Context", ["N/A", "GH? ha-1", "FCFA ha-1", "US$ ha-1"])
+            curr_transplanting = st.selectbox("Transplanting Currency Context", [ "GH? ha-1", "N/A","FCFA ha-1", "US$ ha-1"])
+            curr_ecc_total = st.selectbox("Max Cost Currency Context", [ "FCFA ha-1", "N/A", "GH? ha-1","US$ ha-1"])
 
-        submit_btn = st.form_submit_button("Run Estimation Model")
+        submit_btn = st.form_submit_button("Predict Benefit")
 
         if submit_btn:
             try:
