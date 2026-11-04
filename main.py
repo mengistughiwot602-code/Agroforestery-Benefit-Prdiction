@@ -100,8 +100,8 @@ except Exception as e:
 
 # --- Sidebar Navigation ---
 with st.sidebar:
-    st.markdown("<h2 style='text-align: center;'>🌴 Dashboard Navigation Menu 🌴</h2>", unsafe_allow_html=True)
-    page = st.radio("Jump to section:", ["📋 Data Overview & Batch Prediction", "📊 Analytics", "🔮 Prediction of Benefits"])
+    st.markdown("<h2 style='text-align: center;'>🌴 Dashboard Navigation 🌴</h2>", unsafe_allow_html=True)
+    page = st.radio("Menu:", ["📋 Data Overview & Batch Prediction", "📊 Analytics", "🔮 Prediction of Benefits"])
 
 # --- PAGE 1: OVERVIEW ---
 if page == "📋 Data Overview & Batch Prediction":
@@ -197,11 +197,11 @@ elif page == "🔮 Prediction of Benefits":
 
         with c_l:
             # Slider layout instead of numeric steps +/- fields
-            totalusd2020 = st.slider("Total USD 2020 (totalusd2020)", min_value=0.0, max_value=25000.0, value=152.0, step=10.0)
-            EcC_total_max = st.slider("Max Economic Cost (EcC_total_max)", min_value=0.0, max_value=20000.0, value=0.0, step=10.0)
-            EcB_income_max = st.slider("Max Economic Benefit Income (EcB_income_max)", min_value=0.0, max_value=50000.0, value=0.0, step=10.0)
+            totalusd2020 = st.slider("Total USD 2020 (totalusd2020)", min_value=0.0, max_value=25000.0, value=500.0, step=10.0)
+            EcC_total_max = st.slider("Max Economic Cost (EcC_total_max)", min_value=0.0, max_value=20000.0, value=233.0, step=10.0)
+            EcB_income_max = st.slider("Max Economic Benefit Income (EcB_income_max)", min_value=0.0, max_value=50000.0, value=4050.0, step=10.0)
         with c_r:
-            EcB_tree = st.slider("Tree Benefits Value (EcB_tree)", min_value=0.0, max_value=30000.0, value=0.0, step=10.0)
+            EcB_tree = st.slider("Tree Benefits Value (EcB_tree)", min_value=0.0, max_value=30000.0, value=650.0, step=10.0)
             curr_transplanting = st.selectbox("Transplanting Currency Context", ["N/A", "GH? ha-1", "FCFA ha-1", "US$ ha-1"])
             curr_ecc_total = st.selectbox("Max Cost Currency Context", ["N/A", "GH? ha-1", "FCFA ha-1", "US$ ha-1"])
 
