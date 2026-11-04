@@ -192,7 +192,7 @@ elif page == "🔮 Prediction of Benefits":
     st.markdown("<div class='sub-title'>Enter biophysical and economic values to calculate predicted benefits</div>", unsafe_allow_html=True)
 
     with st.form("prediction_form"):
-        st.write("##### Adjust parameters using professional sliders:")
+        st.write("##### Adjust parameters using sliders:")
         c_l, c_r = st.columns(2)
 
         with c_l:
