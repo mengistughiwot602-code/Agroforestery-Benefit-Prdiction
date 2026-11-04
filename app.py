@@ -164,13 +164,16 @@ elif page == "🔮 Predict Benefits":
                 # Generate template row matching the training set columns
                 input_row = X_template.iloc[[0]].copy()
                 
-                # Identify numeric features based on preprocessor's list
-                numeric_features = preprocessor.transformers_[0][2]
-                
-                # Ensure EVERY numeric feature is explicitly cast to float and filled with 0.0 to prevent type ufunc 'isnan' conflicts
-                for col in numeric_features:
-                    if col in input_row.columns:
-                        input_row[col] = pd.to_numeric(input_row[col], errors='coerce').astype(float).fillna(0.0)
+                # Ensure every single column of the dataset template has the correct data type
+                # Objects can break numerical scaling pipelines with 'isnan' errors
+                for col in input_row.columns:
+                    if col in ['totalusd2020', 'EcC_total_max', 'EcB_income_max', 'EcB_tree']:
+                        continue
+                    # Force original data type mappings 
+                    if pd.api.types.is_numeric_dtype(X_template[col]):
+                        input_row[col] = pd.to_numeric(input_row[col], errors='coerce').fillna(0.0).astype(float)
+                    else:
+                        input_row[col] = input_row[col].astype(str)
                 
                 # Map specific user-supplied fields
                 input_row['totalusd2020'] = float(totalusd2020)
