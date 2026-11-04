@@ -22,7 +22,7 @@ st.markdown("""
         background-color: #f4f7f6;
         font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
     }
-    
+
     /* Sidebar customization */
     [data-testid="stSidebar"] {
         background-image: linear-gradient(180deg, #112d1b 0%, #1e3d2f 100%);
@@ -31,7 +31,7 @@ st.markdown("""
     [data-testid="stSidebar"] * {
         color: white !important;
     }
-    
+
     /* Styled Cards for KPI metrics */
     .kpi-card {
         background-color: #ffffff;
@@ -54,7 +54,7 @@ st.markdown("""
         font-weight: bold;
         margin-top: 5px;
     }
-    
+
     /* App titles */
     .main-title {
         color: #112d1b;
@@ -74,23 +74,23 @@ st.markdown("""
 # --- Loading Data and Models Safely ---
 @st.cache_data
 def load_data():
-    df = pd.read_csv("Costs_and_benefits_of_agroforestry_in_Africa.csv", encoding=\'latin1\')
+    df = pd.read_csv("Costs_and_benefits_of_agroforestry_in_Africa.csv", encoding='latin1')
     df_clean = df.copy()
-    df_clean.drop(\'nbr\', axis=1, errors=\'ignore\', inplace=True)
+    df_clean.drop('nbr', axis=1, errors='ignore', inplace=True)
     # Ensure target/key financial values are numeric without raising errors
-    for col in [\'benefitsusd2020\', \'totalusd2020\', \'EcC_total_max\', \'EcB_income_max\', \'EcB_tree\']:
+    for col in ['benefitsusd2020', 'totalusd2020', 'EcC_total_max', 'EcB_income_max', 'EcB_tree']:
         if col in df_clean.columns:
-            df_clean[col] = pd.to_numeric(df_clean[col], errors=\'coerce\').fillna(0)
+            df_clean[col] = pd.to_numeric(df_clean[col], errors='coerce').fillna(0)
     return df_clean
 
 try:
     df_clean = load_data()
-    
+
     # Dynamic loading of saved joblib and pickle models
     rf_model = joblib.load("rf_agroforestry_model.joblib")
     preprocessor = joblib.load("preprocessor.joblib")
     l1_feature_selector = joblib.load("l1_feature_selector.pkl")
-    
+
     # Get original features (X) template used in training
     target_col = "benefitsusd2020"
     X_template = df_clean.drop(columns=[target_col, "spacing_btw_trees", "benefitsmy"], errors="ignore")
@@ -100,7 +100,7 @@ except Exception as e:
 
 # --- Sidebar Navigation ---
 with st.sidebar:
-    st.markdown("<h2 style=\'text-align: center;\'>🌴 MENU 🌴</h2>", unsafe_allow_html=True)
+    st.markdown("<h2 style='text-align: center;'>🌴 MENU 🌴</h2>", unsafe_allow_html=True)
     page = st.radio("Jump to section:", ["📋 Overview", "📊 Analytics", "🔮 Predict Benefits"])
     
     st.markdown("---")
@@ -109,25 +109,25 @@ with st.sidebar:
 
 # --- PAGE 1: OVERVIEW ---
 if page == "📋 Overview":
-    st.markdown("<div class=\'main-title\'>🌳 Agroforestry Benefits Dashboard</div>", unsafe_allow_html=True)
-    st.markdown("<div class=\'sub-title\'>Overview of the Agroforestry Cost & Benefit Study in Africa</div>", unsafe_allow_html=True)
+    st.markdown("<div class='main-title'>🌳 Agroforestry Benefits Dashboard</div>", unsafe_allow_html=True)
+    st.markdown("<div class='sub-title'>Overview of the Agroforestry Cost & Benefit Study in Africa</div>", unsafe_allow_html=True)
     
     # Interactive Cards Row
     c1, c2, c3 = st.columns(3)
     with c1:
-        st.markdown(f\'<div class="kpi-card"><div class="kpi-title">Dataset Records</div><div class="kpi-value">{len(df_clean)}</div></div>\', unsafe_allow_html=True)
+        st.markdown(f'<div class="kpi-card"><div class="kpi-title">Dataset Records</div><div class="kpi-value">{len(df_clean)}</div></div>', unsafe_allow_html=True)
     with c2:
-        st.markdown(f\'<div class="kpi-card"><div class="kpi-title">Participating Countries</div><div class="kpi-value">{df_clean["Country"].nunique()}</div></div>\', unsafe_allow_html=True)
+        st.markdown(f'<div class="kpi-card"><div class="kpi-title">Participating Countries</div><div class="kpi-value">{df_clean["Country"].nunique()}</div></div>', unsafe_allow_html=True)
     with c3:
-        st.markdown(f\'<div class="kpi-card"><div class="kpi-title">Avg Benefits (USD 2020)</div><div class="kpi-value">${df_clean["benefitsusd2020"].mean():,.2f}</div></div>\', unsafe_allow_html=True)
+        st.markdown(f'<div class="kpi-card"><div class="kpi-title">Avg Benefits (USD 2020)</div><div class="kpi-value">${df_clean["benefitsusd2020"].mean():,.2f}</div></div>', unsafe_allow_html=True)
         
     st.markdown("### Sample Data Snapshot")
     st.dataframe(df_clean.head(20), use_container_width=True)
 
 # --- PAGE 2: ANALYTICS ---
 elif page == "📊 Analytics":
-    st.markdown("<div class=\'main-title\'>📊 Interactive Visualizations</div>", unsafe_allow_html=True)
-    st.markdown("<div class=\'sub-title\'>Explore Agroforestry Trends & Metrics</div>", unsafe_allow_html=True)
+    st.markdown("<div class='main-title'>📊 Interactive Visualizations</div>", unsafe_allow_html=True)
+    st.markdown("<div class='sub-title'>Explore Agroforestry Trends & Metrics</div>", unsafe_allow_html=True)
     
     col_plot1, col_plot2 = st.columns(2)
     
@@ -141,8 +141,8 @@ elif page == "📊 Analytics":
 
 # --- PAGE 3: MODEL PREDICTION ---
 elif page == "🔮 Predict Benefits":
-    st.markdown("<div class=\'main-title\'>🔮 Predict Benefits</div>", unsafe_allow_html=True)
-    st.markdown("<div class=\'sub-title\'>Enter biophysical and economic values to calculate predicted benefits</div>", unsafe_allow_html=True)
+    st.markdown("<div class='main-title'>🔮 Predict Benefits</div>", unsafe_allow_html=True)
+    st.markdown("<div class='sub-title'>Enter biophysical and economic values to calculate predicted benefits</div>", unsafe_allow_html=True)
     
     with st.form("prediction_form"):
         st.write("##### Fill details:")
@@ -170,18 +170,18 @@ elif page == "🔮 Predict Benefits":
                 # Ensure EVERY numeric feature is explicitly cast to float and filled with 0.0 to prevent type ufunc 'isnan' conflicts
                 for col in numeric_features:
                     if col in input_row.columns:
-                        input_row[col] = pd.to_numeric(input_row[col], errors=\'coerce\').astype(float).fillna(0.0)
+                        input_row[col] = pd.to_numeric(input_row[col], errors='coerce').astype(float).fillna(0.0)
                 
                 # Map specific user-supplied fields
-                input_row[\'totalusd2020\'] = float(totalusd2020)
-                input_row[\'EcC_total_max\'] = float(EcC_total_max)
-                input_row[\'EcB_income_max\'] = float(EcB_income_max)
-                input_row[\'EcB_tree\'] = float(EcB_tree)
+                input_row['totalusd2020'] = float(totalusd2020)
+                input_row['EcC_total_max'] = float(EcC_total_max)
+                input_row['EcB_income_max'] = float(EcB_income_max)
+                input_row['EcB_tree'] = float(EcB_tree)
                 
-                if \'curr_EcC_Transplanting\' in input_row.columns:
-                    input_row[\'curr_EcC_Transplanting\'] = str(curr_transplanting)
-                if \'curr_EcC_total_max\' in input_row.columns:
-                    input_row[\'curr_EcC_total_max\'] = str(curr_ecc_total)
+                if 'curr_EcC_Transplanting' in input_row.columns:
+                    input_row['curr_EcC_Transplanting'] = str(curr_transplanting)
+                if 'curr_EcC_total_max' in input_row.columns:
+                    input_row['curr_EcC_total_max'] = str(curr_ecc_total)
                 
                 # Apply transformations sequentially
                 input_processed = preprocessor.transform(input_row)
