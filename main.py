@@ -100,12 +100,12 @@ except Exception as e:
 
 # --- Sidebar Navigation ---
 with st.sidebar:
-    st.markdown("<h2 style='text-align: center;'>🌴 MENU 🌴</h2>", unsafe_allow_html=True)
-    page = st.radio("Jump to section:", ["📋 Overview", "📊 Analytics", "🔮 Predict Benefits"])
+    st.markdown("<h2 style='text-align: center;'>🌴 Dashboard Navigation Menu 🌴</h2>", unsafe_allow_html=True)
+    page = st.radio("Jump to section:", ["📋 Data Overview & Batch Prediction", "📊 Analytics", "🔮 Prediction of Benefits"])
 
 # --- PAGE 1: OVERVIEW ---
-if page == "📋 Overview":
-    st.markdown("<div class='main-title'>🌳 Agroforestry Benefits Dashboard</div>", unsafe_allow_html=True)
+if page == "📋 Data Overview & Batch Prediction":
+    st.markdown("<div class='main-title'>🌳 Agroforestry Benefits In Africa</div>", unsafe_allow_html=True)
     st.markdown("<div class='sub-title'>Overview of the Agroforestry Cost & Benefit Study in Africa</div>", unsafe_allow_html=True)
 
     # Interactive Cards Row
@@ -138,7 +138,7 @@ if page == "📋 Overview":
                 st.error(f"❌ **Unsimilar Feature Error**: The uploaded dataset is missing expected model features: {list(missing_cols)}")
             else:
                 st.success("✅ Features matched! Ready for predictions.")
-                if st.button("Run Batch Forecast"):
+                if st.button("predict the batch"):
                     # Format input according to the training preprocessor pipeline
                     df_processed_batch = batch_df[X_template.columns].copy()
                     numeric_features = preprocessor.transformers_[0][2]
@@ -187,7 +187,7 @@ elif page == "📊 Analytics":
         st.plotly_chart(fig2, use_container_width=True)
 
 # --- PAGE 3: MODEL PREDICTION ---
-elif page == "🔮 Predict Benefits":
+elif page == "🔮 Prediction of Benefits":
     st.markdown("<div class='main-title'>🔮 Predict Benefits</div>", unsafe_allow_html=True)
     st.markdown("<div class='sub-title'>Enter biophysical and economic values to calculate predicted benefits</div>", unsafe_allow_html=True)
 
