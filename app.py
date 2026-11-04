@@ -89,7 +89,7 @@ try:
     # Dynamic loading of saved joblib and pickle models
     rf_model = joblib.load("rf_agroforestry_model.joblib")
     preprocessor = joblib.load("preprocessor.joblib")
-    l1_feature_selector = joblib.load("l1_feature_selector.pkl")
+    l1_feature_selector = joblib.load("l1_feature_selector.joblib")
 
     # Get original features (X) template used in training
     target_col = "benefitsusd2020"
