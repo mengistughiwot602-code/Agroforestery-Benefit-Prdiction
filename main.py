@@ -98,21 +98,40 @@ except Exception as e:
     st.error(f"Initialization error: {e}. Please run the Colab notebook cells first to generate required artifacts.")
     st.stop()
 
-# --- Sidebar Navigation & Batch Predictor ---
+# --- Sidebar Navigation ---
 with st.sidebar:
     st.markdown("<h2 style='text-align: center;'>🌴 MENU 🌴</h2>", unsafe_allow_html=True)
     page = st.radio("Jump to section:", ["📋 Overview", "📊 Analytics", "🔮 Predict Benefits"])
-    
+
+# --- PAGE 1: OVERVIEW ---
+if page == "📋 Overview":
+    st.markdown("<div class='main-title'>🌳 Agroforestry Benefits Dashboard</div>", unsafe_allow_html=True)
+    st.markdown("<div class='sub-title'>Overview of the Agroforestry Cost & Benefit Study in Africa</div>", unsafe_allow_html=True)
+
+    # Interactive Cards Row
+    c1, c2, c3 = st.columns(3)
+    with c1:
+        st.markdown(f'<div class="kpi-card"><div class="kpi-title">Dataset Records</div><div class="kpi-value">{len(df_clean)}</div></div>', unsafe_allow_html=True)
+    with c2:
+        st.markdown(f'<div class="kpi-card"><div class="kpi-title">Participating Countries</div><div class="kpi-value">{df_clean["Country"].nunique()}</div></div>', unsafe_allow_html=True)
+    with c3:
+        st.markdown(f'<div class="kpi-card"><div class="kpi-title">Avg Benefits (USD 2020)</div><div class="kpi-value">${df_clean["benefitsusd2020"].mean():,.2f}</div></div>', unsafe_allow_html=True)
+
+    st.markdown("### Sample Data Snapshot")
+    st.dataframe(df_clean.head(20), use_container_width=True)
+
     st.markdown("---")
     st.markdown("### 📂 Batch Predictor")
-    uploaded_file = st.file_uploader("Upload batch CSV to predict benefits", type=["csv"])
+    st.markdown("Upload a batch CSV file below to run predictions and estimate values instantly.")
     
+    uploaded_file = st.file_uploader("Upload batch CSV to predict benefits", type=["csv"])
+
     if uploaded_file is not None:
         try:
             batch_df = pd.read_csv(uploaded_file, encoding='latin1')
             expected_columns = set(X_template.columns)
             uploaded_columns = set(batch_df.columns)
-            
+
             # Check for column alignment to show "Unsimilar Feature Error"
             missing_cols = expected_columns - uploaded_columns
             if len(missing_cols) > 0:
@@ -123,23 +142,23 @@ with st.sidebar:
                     # Format input according to the training preprocessor pipeline
                     df_processed_batch = batch_df[X_template.columns].copy()
                     numeric_features = preprocessor.transformers_[0][2]
-                    
+
                     for col in df_processed_batch.columns:
                         if col in numeric_features:
                             df_processed_batch[col] = pd.to_numeric(df_processed_batch[col], errors='coerce').fillna(0.0).astype(float)
                         else:
                             df_processed_batch[col] = df_processed_batch[col].astype(str).fillna("Unspecified")
-                            
+
                     transformed_batch = preprocessor.transform(df_processed_batch)
                     transformed_l1_batch = l1_feature_selector.transform(transformed_batch)
                     predictions = rf_model.predict(transformed_l1_batch)
-                    
+
                     result_df = batch_df.copy()
                     result_df['Predicted_Benefits_USD_2020'] = predictions
-                    
+
                     st.write("##### Batch Forecast Snippet")
                     st.dataframe(result_df[['Country', 'Predicted_Benefits_USD_2020']].head(10))
-                    
+
                     # Output CSV download button
                     csv_buffer = io.StringIO()
                     result_df.to_csv(csv_buffer, index=False)
@@ -152,34 +171,17 @@ with st.sidebar:
         except Exception as batch_err:
             st.error(f"Error processing batch: {batch_err}")
 
-# --- PAGE 1: OVERVIEW ---
-if page == "📋 Overview":
-    st.markdown("<div class='main-title'>🌳 Agroforestry Benefits Dashboard</div>", unsafe_allow_html=True)
-    st.markdown("<div class='sub-title'>Overview of the Agroforestry Cost & Benefit Study in Africa</div>", unsafe_allow_html=True)
-    
-    # Interactive Cards Row
-    c1, c2, c3 = st.columns(3)
-    with c1:
-        st.markdown(f'<div class="kpi-card"><div class="kpi-title">Dataset Records</div><div class="kpi-value">{len(df_clean)}</div></div>', unsafe_allow_html=True)
-    with c2:
-        st.markdown(f'<div class="kpi-card"><div class="kpi-title">Participating Countries</div><div class="kpi-value">{df_clean["Country"].nunique()}</div></div>', unsafe_allow_html=True)
-    with c3:
-        st.markdown(f'<div class="kpi-card"><div class="kpi-title">Avg Benefits (USD 2020)</div><div class="kpi-value">${df_clean["benefitsusd2020"].mean():,.2f}</div></div>', unsafe_allow_html=True)
-        
-    st.markdown("### Sample Data Snapshot")
-    st.dataframe(df_clean.head(20), use_container_width=True)
-
 # --- PAGE 2: ANALYTICS ---
 elif page == "📊 Analytics":
     st.markdown("<div class='main-title'>📊 Interactive Visualizations</div>", unsafe_allow_html=True)
     st.markdown("<div class='sub-title'>Explore Agroforestry Trends & Metrics</div>", unsafe_allow_html=True)
-    
+
     col_plot1, col_plot2 = st.columns(2)
-    
+
     with col_plot1:
         fig1 = px.histogram(df_clean, x="Country", title="Records Count per Country", color="Country", color_discrete_sequence=px.colors.sequential.Teal)
         st.plotly_chart(fig1, use_container_width=True)
-        
+
     with col_plot2:
         fig2 = px.scatter(df_clean, x="totalusd2020", y="benefitsusd2020", color="Country", title="Total Cost vs. Benefits (USD 2020)", hover_data=["Agrofor_practice"])
         st.plotly_chart(fig2, use_container_width=True)
@@ -188,52 +190,52 @@ elif page == "📊 Analytics":
 elif page == "🔮 Predict Benefits":
     st.markdown("<div class='main-title'>🔮 Predict Benefits</div>", unsafe_allow_html=True)
     st.markdown("<div class='sub-title'>Enter biophysical and economic values to calculate predicted benefits</div>", unsafe_allow_html=True)
-    
+
     with st.form("prediction_form"):
-        st.write("##### Fill details (Input values directly without +/- step buttons):")
+        st.write("##### Adjust parameters using professional sliders:")
         c_l, c_r = st.columns(2)
-        
+
         with c_l:
-            # Setting step=None removes standard +/- buttons
-            totalusd2020 = st.number_input("Total USD 2020 (totalusd2020)", min_value=0.0, value=152.0, step=None)
-            EcC_total_max = st.number_input("Max Economic Cost (EcC_total_max)", min_value=0.0, value=0.0, step=None)
-            EcB_income_max = st.number_input("Max Economic Benefit Income (EcB_income_max)", min_value=0.0, value=0.0, step=None)
+            # Slider layout instead of numeric steps +/- fields
+            totalusd2020 = st.slider("Total USD 2020 (totalusd2020)", min_value=0.0, max_value=25000.0, value=152.0, step=10.0)
+            EcC_total_max = st.slider("Max Economic Cost (EcC_total_max)", min_value=0.0, max_value=20000.0, value=0.0, step=10.0)
+            EcB_income_max = st.slider("Max Economic Benefit Income (EcB_income_max)", min_value=0.0, max_value=50000.0, value=0.0, step=10.0)
         with c_r:
-            EcB_tree = st.number_input("Tree Benefits Value (EcB_tree)", min_value=0.0, value=0.0, step=None)
+            EcB_tree = st.slider("Tree Benefits Value (EcB_tree)", min_value=0.0, max_value=30000.0, value=0.0, step=10.0)
             curr_transplanting = st.selectbox("Transplanting Currency Context", ["N/A", "GH? ha-1", "FCFA ha-1", "US$ ha-1"])
             curr_ecc_total = st.selectbox("Max Cost Currency Context", ["N/A", "GH? ha-1", "FCFA ha-1", "US$ ha-1"])
-            
+
         submit_btn = st.form_submit_button("Run Estimation Model")
-        
+
         if submit_btn:
             try:
                 # Generate template row matching the training set columns
                 df_template = X_template.iloc[[0]].copy()
-                
+
                 numeric_features = preprocessor.transformers_[0][2]
-                
+
                 for col in df_template.columns:
                     if col in numeric_features:
                         df_template[col] = pd.to_numeric(df_template[col], errors='coerce').fillna(0.0).astype(float)
                     else:
                         df_template[col] = df_template[col].astype(str).fillna("Unspecified")
-                
+
                 # Map the user form inputs securely
                 df_template['totalusd2020'] = float(totalusd2020)
                 df_template['EcC_total_max'] = float(EcC_total_max)
                 df_template['EcB_income_max'] = float(EcB_income_max)
                 df_template['EcB_tree'] = float(EcB_tree)
-                
+
                 if 'curr_EcC_Transplanting' in df_template.columns:
                     df_template['curr_EcC_Transplanting'] = str(curr_transplanting)
                 if 'curr_EcC_total_max' in df_template.columns:
                     df_template['curr_EcC_total_max'] = str(curr_ecc_total)
-                
+
                 # Apply transformations sequentially
                 input_processed = preprocessor.transform(df_template)
                 input_processed_l1 = l1_feature_selector.transform(input_processed)
                 prediction = rf_model.predict(input_processed_l1)[0]
-                
+
                 st.balloons()
                 st.success(f"### 🎉 Predicted Agroforestry Economic Benefits: ${prediction:,.2f} USD (2020)")
             except Exception as ex:
