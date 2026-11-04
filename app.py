@@ -162,32 +162,31 @@ elif page == "🔮 Predict Benefits":
         if submit_btn:
             try:
                 # Generate template row matching the training set columns
-                input_row = X_template.iloc[[0]].copy()
+                df_template = X_template.iloc[[0]].copy()
                 
-                # Ensure every single column of the dataset template has the correct data type
-                # Objects can break numerical scaling pipelines with 'isnan' errors
-                for col in input_row.columns:
-                    if col in ['totalusd2020', 'EcC_total_max', 'EcB_income_max', 'EcB_tree']:
-                        continue
-                    # Force original data type mappings 
-                    if pd.api.types.is_numeric_dtype(X_template[col]):
-                        input_row[col] = pd.to_numeric(input_row[col], errors='coerce').fillna(0.0).astype(float)
+                # Get numeric features explicitly from the loaded ColumnTransformer pipeline
+                # This prevents 'isnan' errors inside the StandardScaler stage of our pipeline
+                numeric_features = preprocessor.transformers_[0][2]
+                
+                for col in df_template.columns:
+                    if col in numeric_features:
+                        df_template[col] = pd.to_numeric(df_template[col], errors='coerce').fillna(0.0).astype(float)
                     else:
-                        input_row[col] = input_row[col].astype(str)
+                        df_template[col] = df_template[col].astype(str).fillna("Unspecified")
                 
-                # Map specific user-supplied fields
-                input_row['totalusd2020'] = float(totalusd2020)
-                input_row['EcC_total_max'] = float(EcC_total_max)
-                input_row['EcB_income_max'] = float(EcB_income_max)
-                input_row['EcB_tree'] = float(EcB_tree)
+                # Map the user form inputs securely
+                df_template['totalusd2020'] = float(totalusd2020)
+                df_template['EcC_total_max'] = float(EcC_total_max)
+                df_template['EcB_income_max'] = float(EcB_income_max)
+                df_template['EcB_tree'] = float(EcB_tree)
                 
-                if 'curr_EcC_Transplanting' in input_row.columns:
-                    input_row['curr_EcC_Transplanting'] = str(curr_transplanting)
-                if 'curr_EcC_total_max' in input_row.columns:
-                    input_row['curr_EcC_total_max'] = str(curr_ecc_total)
+                if 'curr_EcC_Transplanting' in df_template.columns:
+                    df_template['curr_EcC_Transplanting'] = str(curr_transplanting)
+                if 'curr_EcC_total_max' in df_template.columns:
+                    df_template['curr_EcC_total_max'] = str(curr_ecc_total)
                 
                 # Apply transformations sequentially
-                input_processed = preprocessor.transform(input_row)
+                input_processed = preprocessor.transform(df_template)
                 input_processed_l1 = l1_feature_selector.transform(input_processed)
                 prediction = rf_model.predict(input_processed_l1)[0]
                 
